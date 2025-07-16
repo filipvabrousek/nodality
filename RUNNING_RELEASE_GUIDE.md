@@ -1,5 +1,92 @@
 ## Running release
 
+### Dev
+```sh
+sh librun.sh
+```
+
+### Release
+
+```sh
+sh launch/release.sh
+```
+
+
+
+
+
+
+
+### If branch behind
+
+```sh
+ git pull --rebase origin main
+ ```
+
+
+
+
+
+
+
+
+
+### Source
+librun.sh
+```sh
+PORT=3000
+lsof -i tcp:$PORT -t | xargs kill -9 2>/dev/null || true
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+sleep 1
+
+nvm use 21
+cd /Users/filipvabrousek/desktop/layout && serve &
+sleep 1 # Give the server a chance to start
+
+# Wait until the server is up by checking the HTTP status
+while ! curl -s http://localhost:3000 >/dev/null; do
+  sleep 1
+done
+
+open http://localhost:3000/designertest/1-pageSample%   
+```
+
+launch.sh
+```sh
+cp -R /Users/filipvabrousek/Desktop/layout/layout /Users/filipvabrousek/launch/
+cp -R /Users/filipvabrousek/Desktop/layout/lib /Users/filipvabrousek/launch/
+current_version=$(grep -o '"version": "[^"]*"' package.json | sed -E 's/"version": "([0-9]+\.[0-9]+\.[0-9]+-beta\.)([0-9]+)"/\2/'); \
+next_version=$((current_version + 1)); \
+sed -i '' -E "s/(\"version\": \"[0-9]+\.[0-9]+\.[0-9]+-beta\.)[0-9]+\"/\1${next_version}\"/" package.json
+npm run build
+npm publish
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### testing
 ```sh
 sh librun.sh
@@ -389,3 +476,9 @@ npm test
 
 
 also works without watchman
+
+
+
+# Compatibility
+* tested on Windows 11 and macOS 15
+
