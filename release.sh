@@ -14,7 +14,7 @@ cp -R /Users/filipvabrousek/Desktop/layout/lib /Users/filipvabrousek/launch/
 
 # Run Playwright tests
 echo "🧪 Running Playwright tests..."
-if ! npx playwright test; then
+if ! npm run test; then
   echo "❌ Playwright tests failed. Aborting release."
   exit 1
 fi
