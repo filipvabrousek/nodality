@@ -79,7 +79,7 @@ npm run build
 launch_and_open "." "npm start" 5173  # Vite uses `npm run preview`
 
 ### 3. Vue app (Vite, usually 5173 or 5174)
-npx create-nodality-vue my-app-vue
+yes | npx create-nodality-vue my-app-vue
 cd my-app-vue
 launch_and_open "." "npm run dev" 5174
 
