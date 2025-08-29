@@ -98,6 +98,24 @@ for i in 1 2 3; do
 done
 
 # ----------------------------
+# Step 2.5: Update bin/index.js for create-* packages
+# ----------------------------
+for i in 2 3; do
+  pkg_name="${PKG_NAMES[$i]}"
+  pkg_path="${PKG_PATHS[$i]}"
+  cd "$pkg_path" || exit 1
+
+  bin_file="bin/index.js"
+  if [ -f "$bin_file" ]; then
+    echo "Updating nodality version in $pkg_name/$bin_file to ^${nodality_version}"
+    sed -i.bak -E "s|(nodality: \\\")[^\"]+(\")|\1^${nodality_version}\2|" "$bin_file"
+    rm "$bin_file.bak"
+  else
+    echo "⚠️ $bin_file not found in $pkg_name, skipping update."
+  fi
+done
+
+# ----------------------------
 # Step 3: Build & publish
 # ----------------------------
 for i in "${!PKG_NAMES[@]}"; do
