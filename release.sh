@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# Get the current GitHub user
-auth_output=$(gh auth status 2>&1)
+# ----------------------------
+# Nodality Release Script (macOS Bash 3.2 Compatible)
+# ----------------------------
 
-# Check if logged in as 'nodalityjs'
+# GitHub auth check
+auth_output=$(gh auth status 2>&1)
 if echo "$auth_output" | grep -q 'github\.com as nodalityjs'; then
   echo "🚀 Logged in as nodalityjs — continuing."
 else
@@ -14,6 +16,7 @@ fi
 # Copy layout folders
 cp -R /Users/filipvabrousek/Desktop/layout/layout /Users/filipvabrousek/launch/
 cp -R /Users/filipvabrousek/Desktop/layout/lib /Users/filipvabrousek/launch/
+cp -R /Users/filipvabrousek/Desktop/layout/assets /Users/filipvabrousek/launch/
 
 # Run Playwright tests
 echo "🧪 Running Playwright tests..."
@@ -23,61 +26,95 @@ if ! npm run test; then
 fi
 echo "✅ All tests passed."
 
-# Helper function to extract beta number from package.json version
-get_beta_version() {
-  grep -o '"version": "[^"]*"' "$1" | sed -E 's/"version": "[0-9]+\.[0-9]+\.[0-9]+-beta\.([0-9]+)"/\1/'
+# ----------------------------
+# Packages (use parallel arrays for Bash 3.2)
+# ----------------------------
+PKG_NAMES=("nodality" "create-nodality" "create-nodality-react" "create-nodality-vue")
+PKG_PATHS=(
+  "/Users/filipvabrousek/launch"
+  "/Users/filipvabrousek/create-nodality"
+  "/Users/filipvabrousek/create-nodality-react"
+  "/Users/filipvabrousek/create-nodality-vue"
+)
+RELEASE_VERSIONS=()
+
+# ----------------------------
+# Helper: Get available version on npm
+# ----------------------------
+get_available_version() {
+  pkg_name="$1"
+  candidate="$2"
+  candidate=${candidate#v}  # Strip leading v if exists
+  while npm view "$pkg_name@$candidate" >/dev/null 2>&1; do
+    candidate=$(npm version patch --no-git-tag-version | tr -d '"')
+    candidate=${candidate#v}
+  done
+  echo "$candidate"
 }
 
-# Paths to packages
-NODALITY_PATH="/Users/filipvabrousek/launch"
-CREATE_NODALITY_PATH="/Users/filipvabrousek/create-nodality"
-CREATE_NODALITY_REACT_PATH="/Users/filipvabrousek/create-nodality-react"
-CREATE_NODALITY_VUE_PATH="/Users/filipvabrousek/create-nodality-vue"
+# ----------------------------
+# Step 1: Determine release version
+# ----------------------------
+echo "🔢 Checking current versions and determining release..."
+for i in "${!PKG_NAMES[@]}"; do
+  pkg_name="${PKG_NAMES[$i]}"
+  pkg_path="${PKG_PATHS[$i]}"
+  cd "$pkg_path" || exit 1
 
-# Get current beta versions
-beta_nodality=$(get_beta_version "$NODALITY_PATH/package.json")
-beta_create_nodality=$(get_beta_version "$CREATE_NODALITY_PATH/package.json")
-beta_create_nodality_react=$(get_beta_version "$CREATE_NODALITY_REACT_PATH/package.json")
-beta_create_nodality_vue=$(get_beta_version "$CREATE_NODALITY_VUE_PATH/package.json")
+  current_version=$(npm pkg get version | tr -d '"')
+  echo "Current version of $pkg_name: $current_version"
 
-# Find highest beta version
-highest_beta=$(printf "%s\n%s\n%s\n%s\n" "$beta_nodality" "$beta_create_nodality" "$beta_create_nodality_react" "$beta_create_nodality_vue" | sort -nr | head -n1)
+  if [[ "$current_version" == *-beta* ]]; then
+    # First stable release: strip -beta
+    release_version="${current_version/-beta.*}"
+    echo "First stable release detected. Base version: $release_version"
+    npm version "$release_version" --no-git-tag-version
+  else
+    # Already stable: increment patch
+    release_version=$(npm version patch --no-git-tag-version)
+    release_version=${release_version#v}
+    echo "Stable release detected. Auto-incremented patch: $release_version"
+  fi
 
-# Bump highest beta by 1
-next_beta=$((highest_beta + 1))
-full_version="1.0.0-beta.${next_beta}"
+  # Check if version exists on npm
+  release_version=$(get_available_version "$pkg_name" "$release_version")
+  RELEASE_VERSIONS[$i]="$release_version"
 
-echo "🔢 Highest beta version found: $highest_beta"
-echo "⬆️ Bumping all packages to: $full_version"
+  # Update package.json to final version
+  npm version "${RELEASE_VERSIONS[$i]}" --no-git-tag-version
+  echo "✅ Final release version for $pkg_name: ${RELEASE_VERSIONS[$i]}"
+done
 
-# Update nodality
-cd "$NODALITY_PATH"
-sed -i '' -E "s/(\"version\": \")1\.0\.0-beta\.[0-9]+\"/\1${full_version}\"/" package.json
-npm run inject-license
-npm run build
-npm publish
-echo "✅ Published nodality@$full_version"
+# ----------------------------
+# Step 2: Update nodality dependencies
+# ----------------------------
+nodality_version="${RELEASE_VERSIONS[0]}"
+for i in 1 2 3; do
+  pkg_name="${PKG_NAMES[$i]}"
+  pkg_path="${PKG_PATHS[$i]}"
+  cd "$pkg_path" || exit 1
+  echo "Updating nodality dependency in $pkg_name to ^$nodality_version"
+  npm install "nodality@$nodality_version" --save
+done
 
-# Update create-nodality
-cd "$CREATE_NODALITY_PATH"
-sed -i '' -E "s/(\"version\": \")1\.0\.0-beta\.[0-9]+\"/\1${full_version}\"/" package.json
-sed -i '' -E "s/(\"nodality\": \")\^1\.0\.0-beta\.[0-9]+\"/\1\\^${full_version}\"/" package.json
-sed -i '' -E "s/(nodality: \\\")\^1\.0\.0-beta\.[0-9]+(\\\")/\1\\^${full_version}\2/" bin/index.js
-npm publish
-echo "✅ Published create-nodality@$full_version"
+# ----------------------------
+# Step 3: Build & publish
+# ----------------------------
+for i in "${!PKG_NAMES[@]}"; do
+  pkg_name="${PKG_NAMES[$i]}"
+  pkg_path="${PKG_PATHS[$i]}"
+  cd "$pkg_path" || exit 1
 
-# Update create-nodality-react
-cd "$CREATE_NODALITY_REACT_PATH"
-sed -i '' -E "s/(\"version\": \")1\.0\.0-beta\.[0-9]+\"/\1${full_version}\"/" package.json
-sed -i '' -E "s/(nodality: \\\")\^1\.0\.0-beta\.[0-9]+(\\\")/\1\\^${full_version}\2/" bin/index.js
-npm publish
-echo "✅ Published create-nodality-react@$full_version"
+  # Only build nodality
+  if [[ "$pkg_name" == "nodality" ]]; then
+    echo "🔨 Building $pkg_name..."
+    npm run inject-license 2>/dev/null || true
+    npm run build 2>/dev/null || true
+  fi
 
-# Update create-nodality-vue
-cd "$CREATE_NODALITY_VUE_PATH"
-sed -i '' -E "s/(\"version\": \")1\.0\.0-beta\.[0-9]+\"/\1${full_version}\"/" package.json
-sed -i '' -E "s/(nodality: \\\")\^1\.0\.0-beta\.[0-9]+(\\\")/\1\\^${full_version}\2/" bin/index.js
-npm publish
-echo "✅ Published create-nodality-vue@$full_version"
+  echo "📦 Publishing $pkg_name..."
+  npm publish
+  echo "✅ Published $pkg_name@${RELEASE_VERSIONS[$i]}"
+done
 
-echo "🎉 All packages are aligned and published at version $full_version"
+echo "🎉 Release complete. All packages published at their final versions."
