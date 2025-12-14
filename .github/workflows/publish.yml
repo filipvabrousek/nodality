@@ -25,7 +25,11 @@ jobs:
         with:
           node-version: '18.20.0'
           registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
+          cache: npm
+
+       # 5. Run tests (Playwright or other)
+      - name: Run tests
+        run: npm test
 
       - run: npm install --frozen-lockfile
       - run: npm run typecheck
